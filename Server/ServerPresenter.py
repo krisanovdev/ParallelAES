@@ -5,7 +5,7 @@ import time
 
 class ServerPresenter:
     PORT = 14900
-    BLOCK_SIZE = 2**10 # 1 kb
+    BLOCK_SIZE = 2**10 * 2**10 * 8
 
     def __init__(self, filename):
         self.server_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
@@ -27,6 +27,10 @@ class ServerPresenter:
                 position = right_bound
 
         print(len(self.blocks))
+        for key, value in self.blocks.items():
+            print(len(value))
+
+
 
     def start_server(self):
         self.server_socket.bind(("", ServerPresenter.PORT))
@@ -39,6 +43,7 @@ class ServerPresenter:
         while 1:
             client, addr = self.server_socket.accept()
             try:
+                client.settimeout(5)
                 self.clients.append(client)
             except Exception as e:
                 print(e)
@@ -50,8 +55,7 @@ class ServerPresenter:
                     time.sleep(3)
                 for i in range(len(self.clients)):
                     if not self.blocks:
-                        time.sleep(5)
-                        continue
+                        break
                     if not self.__client_is_busy(i):
                         self.__assign_task(i)
             except Exception as e:
@@ -64,6 +68,8 @@ class ServerPresenter:
                     time.sleep(3)
                 for i in range(len(self.clients)):
                     client = self.clients[i]
+                    if not self.__client_is_busy(i):
+                        continue
                     data = client.recv(ServerPresenter.BLOCK_SIZE)
                     self.__on_part_of_task_done(self.tasks_map[i], data)
             except Exception as e:
@@ -73,11 +79,19 @@ class ServerPresenter:
         return client_index in self.tasks_map and self.remaining[self.tasks_map[client_index]] != 0
 
     def __on_part_of_task_done(self, task_index, data):
-        with open('file' + str(task_index), 'ab+') as file:
-            file.write(data)
-        self.remaining[task_index] -= len(data)
+        try:
+            if not data:
+                return
+            with open('file' + str(task_index), 'ab+') as file:
+                file.write(data)
+            self.remaining[task_index] -= len(data)
+        except Exception as e:
+            print(e)
 
     def __assign_task(self, client_index):
-        key, value = self.blocks.popitem()
-        self.tasks_map[client_index] = key
-        self.clients[client_index].send(value)
+        try:
+            key, value = self.blocks.popitem()
+            self.tasks_map[client_index] = key
+            self.clients[client_index].send(value)
+        except Exception as e:
+            print(e)
